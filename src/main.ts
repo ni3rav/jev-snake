@@ -18,9 +18,11 @@ type MoveResponse = {
 };
 
 const TURNS: Turn[] = ["straight", "left", "right"];
+const DEFAULT_RETRY_MS = 15_000;
 
 const boardEl = document.querySelector("#board")!;
 const idleEl = document.querySelector("#idle") as HTMLElement;
+const afkEl = document.querySelector("#afk") as HTMLElement;
 const hudEl = document.querySelector("#hud")!;
 const playBtn = document.querySelector("#play") as HTMLButtonElement;
 const pauseBtn = document.querySelector("#pause") as HTMLButtonElement;
@@ -44,6 +46,16 @@ let running = false;
 let abort: AbortController | null = null;
 let pendingTurn: Turn | null = null;
 let jevBusy = false;
+let quietUntil = 0;
+
+class RateLimited extends Error {
+  retryAfterMs: number;
+  constructor(retryAfterMs: number, message: string) {
+    super(message);
+    this.name = "RateLimited";
+    this.retryAfterMs = retryAfterMs;
+  }
+}
 
 function tickMs(): number {
   return Number(tickSlider.value);
@@ -89,6 +101,7 @@ function render(now: number): void {
   const food = (foodRemainingMs(game, now, foodMs()) / 1000).toFixed(1);
   hudEl.textContent = `score ${game.score} · missed ${game.missed} · food ${food}s`;
   syncIdle();
+  syncAfk(now);
 }
 
 function syncIdle(): void {
@@ -98,6 +111,16 @@ function syncIdle(): void {
   }
   idleEl.hidden = false;
   idleEl.textContent = game.dead ? "dead" : "not started";
+}
+
+function syncAfk(now = Date.now()): void {
+  const remaining = quietUntil - now;
+  if (remaining <= 0 || !running) {
+    afkEl.hidden = true;
+    return;
+  }
+  afkEl.hidden = false;
+  afkEl.textContent = `AFK waiting ${Math.ceil(remaining / 1000)}s`;
 }
 
 function dump(label: string, value: unknown): string {
@@ -124,7 +147,16 @@ async function requestMove(state: unknown, signal: AbortSignal): Promise<MoveRes
     body: JSON.stringify({ state }),
     signal: AbortSignal.any([signal, timeout]),
   });
-  const payload = (await response.json()) as MoveResponse;
+  const payload = (await response.json()) as MoveResponse & {
+    rateLimited?: boolean;
+    retryAfterMs?: number;
+  };
+  if (response.status === 429 || payload.rateLimited) {
+    throw new RateLimited(
+      payload.retryAfterMs ?? DEFAULT_RETRY_MS,
+      payload.error ?? "rate limited",
+    );
+  }
   if (!response.ok) {
     throw new Error(payload.error ?? `HTTP ${response.status}`);
   }
@@ -135,7 +167,7 @@ async function requestMove(state: unknown, signal: AbortSignal): Promise<MoveRes
 }
 
 function kickJev(signal: AbortSignal): void {
-  if (jevBusy || !running || game.dead) return;
+  if (jevBusy || !running || game.dead || Date.now() < quietUntil) return;
   jevBusy = true;
   const tick = game.tick;
   void requestMove(perceive(game, Date.now()), signal)
@@ -146,6 +178,10 @@ function kickJev(signal: AbortSignal): void {
     })
     .catch((error: unknown) => {
       if (error instanceof DOMException && error.name === "AbortError") return;
+      if (error instanceof RateLimited) {
+        quietUntil = Date.now() + Math.max(1000, error.retryAfterMs);
+        syncAfk();
+      }
     })
     .finally(() => {
       jevBusy = false;
@@ -185,7 +221,9 @@ function stop(): void {
   abort = null;
   jevBusy = false;
   pendingTurn = null;
+  quietUntil = 0;
   syncIdle();
+  syncAfk();
   syncButtons();
 }
 

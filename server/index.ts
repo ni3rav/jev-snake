@@ -1,14 +1,57 @@
 import express from "express";
 import { config } from "dotenv";
 import { resolve } from "node:path";
-import { experimental_evaluate as evaluate } from "ai";
+import { APICallError, experimental_evaluate as evaluate } from "ai";
 import { TURN_QUESTION } from "../src/perception.ts";
 
 config({ path: resolve(import.meta.dirname, "../.env") });
 
 const MODEL = "typesafe-ai/jev";
+const DEFAULT_RETRY_MS = 15_000;
 const app = express();
 app.use(express.json({ limit: "256kb" }));
+
+function headerMap(error: unknown): Record<string, string> | undefined {
+  if (APICallError.isInstance(error)) return error.responseHeaders;
+  if (error && typeof error === "object" && "cause" in error) {
+    const cause = (error as { cause: unknown }).cause;
+    if (APICallError.isInstance(cause)) return cause.responseHeaders;
+  }
+  return undefined;
+}
+
+function statusOf(error: unknown): number | undefined {
+  if (APICallError.isInstance(error) && error.statusCode != null) return error.statusCode;
+  if (error && typeof error === "object" && "statusCode" in error) {
+    const status = (error as { statusCode: unknown }).statusCode;
+    if (typeof status === "number") return status;
+  }
+  const cause = error && typeof error === "object" && "cause" in error ? (error as { cause: unknown }).cause : undefined;
+  if (APICallError.isInstance(cause) && cause.statusCode != null) return cause.statusCode;
+  return undefined;
+}
+
+function retryAfterMs(error: unknown): number {
+  const headers = headerMap(error);
+  const retryMs = Number(headers?.["retry-after-ms"]);
+  if (Number.isFinite(retryMs) && retryMs >= 0) return retryMs;
+
+  const retryAfter = headers?.["retry-after"];
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+    const at = Date.parse(retryAfter);
+    if (!Number.isNaN(at)) return Math.max(0, at - Date.now());
+  }
+
+  return DEFAULT_RETRY_MS;
+}
+
+function isRateLimit(error: unknown): boolean {
+  if (statusOf(error) === 429) return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /429|rate limit|too many requests/i.test(message);
+}
 
 app.post("/api/move", async (req, res) => {
   if (!process.env.AI_GATEWAY_API_KEY) {
@@ -33,6 +76,7 @@ app.post("/api/move", async (req, res) => {
       model: MODEL,
       state,
       questions,
+      maxRetries: 0,
     });
 
     const choice = result.answers.turn.choice;
@@ -44,6 +88,16 @@ app.post("/api/move", async (req, res) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (isRateLimit(error)) {
+      const retryAfterMsValue = retryAfterMs(error);
+      res.set("Retry-After", String(Math.ceil(retryAfterMsValue / 1000)));
+      res.status(429).json({
+        error: message,
+        rateLimited: true,
+        retryAfterMs: retryAfterMsValue,
+      });
+      return;
+    }
     res.status(502).json({ error: message, input });
   }
 });

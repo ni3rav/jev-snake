@@ -31,7 +31,20 @@ h2 {
 .layout {
   display: grid;
   grid-template-columns: auto minmax(22rem, 1fr);
+  grid-template-rows: auto 1fr;
   height: 100%;
+}
+
+.afk {
+  grid-column: 1 / -1;
+  padding: 0.4rem 1rem;
+  background: #ffe08a;
+  text-align: center;
+  font-weight: 600;
+}
+
+.afk[hidden] {
+  display: none;
 }
 
 .game {
