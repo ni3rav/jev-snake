@@ -7,7 +7,7 @@ import {
   step,
   type Turn,
 } from "./game.ts";
-import { perceive } from "./perception.ts";
+import { perceive, shouldAskJev } from "./perception.ts";
 
 type MoveResponse = {
   turn: Turn;
@@ -47,6 +47,8 @@ let abort: AbortController | null = null;
 let pendingTurn: Turn | null = null;
 let jevBusy = false;
 let quietUntil = 0;
+let lastFoodAt = -1;
+let coastMs = 0;
 
 class RateLimited extends Error {
   retryAfterMs: number;
@@ -168,12 +170,19 @@ async function requestMove(state: unknown, signal: AbortSignal): Promise<MoveRes
 
 function kickJev(signal: AbortSignal): void {
   if (jevBusy || !running || game.dead || Date.now() < quietUntil) return;
+  const now = Date.now();
+  const remaining = foodRemainingMs(game, now, foodMs());
+  const newPellet = game.foodAt !== lastFoodAt;
+  if (!shouldAskJev(game, tickMs(), remaining, coastMs, newPellet)) return;
   jevBusy = true;
   const tick = game.tick;
-  void requestMove(perceive(game, Date.now()), signal)
+  const foodAt = game.foodAt;
+  void requestMove(perceive(game, now), signal)
     .then((payload) => {
       if (!running || game.dead) return;
       pendingTurn = payload.turn;
+      lastFoodAt = foodAt;
+      coastMs = 0;
       pushMove(tick, payload);
     })
     .catch((error: unknown) => {
@@ -204,7 +213,9 @@ async function loop(signal: AbortSignal): Promise<void> {
 
     kickJev(signal);
     const used = Date.now() - started;
-    if (used < tickMs()) await sleep(tickMs() - used, signal);
+    const wait = tickMs();
+    if (used < wait) await sleep(wait - used, signal);
+    coastMs += wait;
   }
   syncIdle();
   syncButtons();
@@ -222,6 +233,8 @@ function stop(): void {
   jevBusy = false;
   pendingTurn = null;
   quietUntil = 0;
+  lastFoodAt = -1;
+  coastMs = 0;
   syncIdle();
   syncAfk();
   syncButtons();

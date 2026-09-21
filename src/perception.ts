@@ -2,6 +2,7 @@ import {
   DELTA,
   LEFT,
   RIGHT,
+  SIZE,
   wrap,
   wrapDelta,
   type CellKind,
@@ -77,23 +78,55 @@ function cellKind(game: Game, point: Point): CellKind {
   return "empty";
 }
 
-export function perceive(game: Game, now: number): JevState {
+function look(game: Game) {
   const head = game.snake[0]!;
   const dx = wrapDelta(game.food.x - head.x);
   const dy = wrapDelta(game.food.y - head.y);
-  const local = toLocal(dx, dy, game.dir);
+  return {
+    head,
+    local: toLocal(dx, dy, game.dir),
+    ahead: cellKind(game, stepPoint(head, game.dir)),
+    left: cellKind(game, stepPoint(head, LEFT[game.dir])),
+    right: cellKind(game, stepPoint(head, RIGHT[game.dir])),
+  };
+}
 
+export function perceive(game: Game, _now: number): JevState {
+  const view = look(game);
   return {
     heading: game.dir,
     length: lengthWord(game.snake.length),
     motion: "coasting straight; this turn is applied after the reply, not on this snapshot",
     adjacent: {
-      ahead: cellKind(game, stepPoint(head, game.dir)),
-      left: cellKind(game, stepPoint(head, LEFT[game.dir])),
-      right: cellKind(game, stepPoint(head, RIGHT[game.dir])),
+      ahead: view.ahead,
+      left: view.left,
+      right: view.right,
     },
     food: {
-      where: foodWhere(local.forward, local.right),
+      where: foodWhere(view.local.forward, view.local.right),
     },
   };
+}
+
+export function shouldAskJev(
+  game: Game,
+  tickMs: number,
+  foodRemainingMs: number,
+  coastMs: number,
+  newPellet: boolean,
+): boolean {
+  if (newPellet) return true;
+
+  const view = look(game);
+  if (view.ahead === "body") return true;
+  if (view.left === "food" || view.right === "food") return true;
+  if (view.ahead === "food") return false;
+  if (view.local.forward <= 0) return true;
+
+  const tick = Math.max(1, tickMs);
+  const etaMs = view.local.forward * tick;
+  const horizonMs = Math.max(tick, foodRemainingMs / SIZE);
+  if (etaMs <= horizonMs) return true;
+
+  return coastMs >= Math.max(tick, foodRemainingMs / 2);
 }
