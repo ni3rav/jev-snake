@@ -1,0 +1,273 @@
+:root {
+  color-scheme: dark;
+  --bg: #101214;
+  --panel: #171a1d;
+  --line: #2a3036;
+  --text: #d7dde3;
+  --muted: #8b949e;
+  --snake: #6ee7a8;
+  --head: #ecfdf3;
+  --food: #f472b6;
+  --input: #7dd3fc;
+  --output: #86efac;
+  --danger: #fca5a5;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(22rem, 28rem) 1fr;
+  gap: 1.25rem;
+  padding: 1.25rem;
+  min-height: 100vh;
+}
+
+.play,
+.inspector {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 1.25rem;
+  letter-spacing: 0.02em;
+}
+
+h2,
+h3 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.sub,
+.status,
+.call-meta,
+.history-title {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.hud {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.stats strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.board-wrap {
+  display: grid;
+  place-items: center;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(16, 1.35rem);
+  grid-template-rows: repeat(16, 1.35rem);
+  gap: 2px;
+  background: #0b0d0f;
+  padding: 6px;
+  border-radius: 8px;
+}
+
+.cell {
+  background: #1c2126;
+  border-radius: 2px;
+}
+
+.cell.snake {
+  background: var(--snake);
+}
+
+.cell.head {
+  background: var(--head);
+}
+
+.cell.food {
+  background: var(--food);
+}
+
+.timer {
+  height: 6px;
+  margin: 0.85rem 0 0.6rem;
+  background: #2a3036;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.timer-bar {
+  height: 100%;
+  width: 100%;
+  background: var(--food);
+  transform-origin: left;
+}
+
+.status {
+  min-height: 1.25rem;
+}
+
+.status.error {
+  color: var(--danger);
+}
+
+.controls {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+button {
+  background: #23282d;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button:not(:disabled):hover {
+  border-color: #4b5563;
+}
+
+.inspector {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.inspector-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+  margin-bottom: 0.75rem;
+}
+
+.panes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  min-height: 22rem;
+  flex: 1;
+}
+
+.pane {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.pane h3 {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.pane-input {
+  border-color: #1e4b66;
+}
+
+.pane-input h3 {
+  color: var(--input);
+  background: #10202a;
+}
+
+.pane-output {
+  border-color: #1e4d38;
+}
+
+.pane-output h3 {
+  color: var(--output);
+  background: #10241b;
+}
+
+.json {
+  flex: 1;
+  overflow: auto;
+  min-height: 16rem;
+}
+
+.json pre {
+  margin: 0;
+  padding: 0.75rem;
+  min-height: 100%;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.json pre code {
+  font-family: inherit;
+}
+
+.history-title {
+  margin: 0.9rem 0 0.45rem;
+}
+
+.history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 9rem;
+  overflow: auto;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.history li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.28rem 0;
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 960px) {
+  .layout,
+  .panes {
+    grid-template-columns: 1fr;
+  }
+}
