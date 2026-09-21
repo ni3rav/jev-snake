@@ -1,6 +1,5 @@
 import "./style.css";
 import {
-  MIN_TICK_MS,
   SIZE,
   expireFood,
   foodRemainingMs,
@@ -18,17 +17,19 @@ type MoveResponse = {
   error?: string;
 };
 
-type StatusKind = "ready" | "waiting" | "playing" | "paused" | "dead" | "error";
-
 const TURNS: Turn[] = ["straight", "left", "right"];
 
 const boardEl = document.querySelector("#board")!;
+const idleEl = document.querySelector("#idle") as HTMLElement;
 const hudEl = document.querySelector("#hud")!;
-const statusEl = document.querySelector("#status") as HTMLElement;
 const playBtn = document.querySelector("#play") as HTMLButtonElement;
 const pauseBtn = document.querySelector("#pause") as HTMLButtonElement;
 const resetBtn = document.querySelector("#reset") as HTMLButtonElement;
 const movesEl = document.querySelector("#moves")!;
+const tickSlider = document.querySelector("#tick-slider") as HTMLInputElement;
+const tickLabel = document.querySelector("#tick-label")!;
+const foodSlider = document.querySelector("#food-slider") as HTMLInputElement;
+const foodLabel = document.querySelector("#food-label")!;
 
 const cells: HTMLDivElement[] = [];
 for (let i = 0; i < SIZE * SIZE; i++) {
@@ -41,6 +42,21 @@ for (let i = 0; i < SIZE * SIZE; i++) {
 let game = newGame(Date.now());
 let running = false;
 let abort: AbortController | null = null;
+let pendingTurn: Turn | null = null;
+let jevBusy = false;
+
+function tickMs(): number {
+  return Number(tickSlider.value);
+}
+
+function foodMs(): number {
+  return Number(foodSlider.value) * 1000;
+}
+
+function syncSliderLabels(): void {
+  tickLabel.textContent = `${tickMs()}ms`;
+  foodLabel.textContent = `${foodSlider.value}s`;
+}
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -54,11 +70,6 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
       { once: true },
     );
   });
-}
-
-function setStatus(text: string, kind: StatusKind = "ready"): void {
-  statusEl.textContent = text;
-  statusEl.dataset.kind = kind;
 }
 
 function render(now: number): void {
@@ -75,8 +86,18 @@ function render(now: number): void {
     }
   }
 
-  const food = (foodRemainingMs(game, now) / 1000).toFixed(1);
+  const food = (foodRemainingMs(game, now, foodMs()) / 1000).toFixed(1);
   hudEl.textContent = `score ${game.score} · missed ${game.missed} · food ${food}s`;
+  syncIdle();
+}
+
+function syncIdle(): void {
+  if (running) {
+    idleEl.hidden = true;
+    return;
+  }
+  idleEl.hidden = false;
+  idleEl.textContent = game.dead ? "dead" : "not started";
 }
 
 function dump(label: string, value: unknown): string {
@@ -113,31 +134,43 @@ async function requestMove(state: unknown, signal: AbortSignal): Promise<MoveRes
   return payload;
 }
 
+function kickJev(signal: AbortSignal): void {
+  if (jevBusy || !running || game.dead) return;
+  jevBusy = true;
+  const tick = game.tick;
+  void requestMove(perceive(game, Date.now()), signal)
+    .then((payload) => {
+      if (!running || game.dead) return;
+      pendingTurn = payload.turn;
+      pushMove(tick, payload);
+    })
+    .catch((error: unknown) => {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+    })
+    .finally(() => {
+      jevBusy = false;
+    });
+}
+
 async function loop(signal: AbortSignal): Promise<void> {
   while (running && !game.dead) {
     const started = Date.now();
-    game = expireFood(game, started);
+    game = expireFood(game, started, foodMs());
+    const turn = pendingTurn ?? "straight";
+    pendingTurn = null;
+    game = step(game, turn, started);
     render(started);
-    setStatus("waiting", "waiting");
-
-    const payload = await requestMove(perceive(game, started), signal);
-    pushMove(game.tick + 1, payload);
-
-    const waited = Date.now() - started;
-    if (waited < MIN_TICK_MS) await sleep(MIN_TICK_MS - waited, signal);
-
-    const now = Date.now();
-    game = expireFood(game, now);
-    game = step(game, payload.turn, now);
-    render(now);
 
     if (game.dead) {
-      setStatus("dead", "dead");
       running = false;
-    } else {
-      setStatus(payload.turn, "playing");
+      break;
     }
+
+    kickJev(signal);
+    const used = Date.now() - started;
+    if (used < tickMs()) await sleep(tickMs() - used, signal);
   }
+  syncIdle();
   syncButtons();
 }
 
@@ -150,6 +183,9 @@ function stop(): void {
   running = false;
   abort?.abort();
   abort = null;
+  jevBusy = false;
+  pendingTurn = null;
+  syncIdle();
   syncButtons();
 }
 
@@ -157,11 +193,12 @@ function start(): void {
   if (running || game.dead) return;
   running = true;
   abort = new AbortController();
+  syncIdle();
   syncButtons();
   void loop(abort.signal).catch((error: unknown) => {
     if (error instanceof DOMException && error.name === "AbortError") return;
     running = false;
-    setStatus(error instanceof Error ? error.message : String(error), "error");
+    syncIdle();
     syncButtons();
   });
 }
@@ -170,17 +207,19 @@ function reset(): void {
   stop();
   game = newGame(Date.now());
   movesEl.replaceChildren();
-  setStatus("ready");
   render(Date.now());
   syncButtons();
 }
 
 playBtn.addEventListener("click", start);
-pauseBtn.addEventListener("click", () => {
-  stop();
-  setStatus("paused", "paused");
-});
+pauseBtn.addEventListener("click", stop);
 resetBtn.addEventListener("click", reset);
+tickSlider.addEventListener("input", syncSliderLabels);
+foodSlider.addEventListener("input", () => {
+  syncSliderLabels();
+  render(Date.now());
+});
 
 render(Date.now());
+syncSliderLabels();
 syncButtons();

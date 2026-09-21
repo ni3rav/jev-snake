@@ -12,19 +12,31 @@
           <h1>Jev Snake</h1>
           <p id="hud">score 0 · missed 0 · food 5.0s</p>
         </header>
-        <div id="board" class="board"></div>
+        <div class="board-wrap">
+          <div id="board" class="board"></div>
+          <p id="idle" class="idle">not started</p>
+        </div>
         <p class="controls">
           <button id="play" type="button">Start</button>
           <button id="pause" type="button" disabled>Pause</button>
           <button id="reset" type="button">New game</button>
         </p>
+        <p class="sliders">
+          <label>
+            snake
+            <input id="tick-slider" type="range" min="50" max="400" step="10" value="150" />
+            <span id="tick-label">150ms</span>
+          </label>
+          <label>
+            food
+            <input id="food-slider" type="range" min="1" max="15" step="1" value="5" />
+            <span id="food-label">5s</span>
+          </label>
+        </p>
       </section>
 
       <section class="log">
-        <header class="log-head">
-          <h2>Moves</h2>
-          <span id="status" class="badge" data-kind="ready">ready</span>
-        </header>
+        <h2>Moves</h2>
         <div id="moves" class="moves"></div>
       </section>
     </main>

@@ -18,7 +18,11 @@ p {
   margin: 0;
 }
 
-h1,
+h1 {
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
 h2 {
   font-size: 1rem;
   font-weight: 600;
@@ -26,27 +30,33 @@ h2 {
 
 .layout {
   display: grid;
-  grid-template-columns: 17rem minmax(0, 1fr);
+  grid-template-columns: auto minmax(22rem, 1fr);
   height: 100%;
 }
 
 .game {
-  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 2rem;
   border-right: 1px solid #ccc;
 }
 
-#hud,
-.controls {
-  margin-top: 0.5rem;
+#hud {
+  margin-top: 0.4rem;
+  color: #444;
+}
+
+.board-wrap {
+  position: relative;
+  width: max-content;
+  margin: 1.25rem 0 1rem;
 }
 
 .board {
   display: grid;
-  grid-template-columns: repeat(16, 14px);
-  grid-template-rows: repeat(16, 14px);
-  gap: 1px;
-  width: max-content;
-  margin-top: 0.75rem;
+  grid-template-columns: repeat(16, 28px);
+  grid-template-rows: repeat(16, 28px);
+  gap: 2px;
   background: #ccc;
 }
 
@@ -66,8 +76,48 @@ h2 {
   background: #c00;
 }
 
+.idle {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  background: rgb(255 255 255 / 0.72);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.idle[hidden] {
+  display: none;
+}
+
+.controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
 button {
   font: inherit;
+}
+
+.sliders {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 1rem;
+}
+
+.sliders label {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr 3.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.sliders input {
+  width: 100%;
 }
 
 .log {
@@ -75,44 +125,12 @@ button {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: 1rem;
+  padding: 1.5rem;
 }
 
-.log-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+.log h2 {
   margin-bottom: 0.5rem;
   flex: 0 0 auto;
-}
-
-.badge {
-  display: inline-block;
-  padding: 0.1rem 0.45rem;
-  border: 1px solid #000;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  background: #eee;
-}
-
-.badge[data-kind="waiting"] {
-  background: #ffe08a;
-}
-
-.badge[data-kind="playing"] {
-  background: #c6e6c6;
-}
-
-.badge[data-kind="paused"] {
-  background: #ddd;
-}
-
-.badge[data-kind="dead"],
-.badge[data-kind="error"] {
-  background: #f5b5b5;
 }
 
 .moves {

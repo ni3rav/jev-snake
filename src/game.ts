@@ -1,6 +1,6 @@
 export const SIZE = 16;
 export const FOOD_MS = 5000;
-export const MIN_TICK_MS = 150;
+export const TICK_MS = 150;
 
 export type Dir = "north" | "east" | "south" | "west";
 export type Turn = "straight" | "left" | "right";
@@ -93,8 +93,8 @@ export function newGame(now: number): Game {
   };
 }
 
-export function expireFood(game: Game, now: number): Game {
-  if (game.dead || now - game.foodAt < FOOD_MS) return game;
+export function expireFood(game: Game, now: number, foodMs = FOOD_MS): Game {
+  if (game.dead || now - game.foodAt < foodMs) return game;
   return {
     ...game,
     food: spawnFood(game.snake),
@@ -133,6 +133,6 @@ export function step(game: Game, turn: Turn, now: number): Game {
   return { ...game, snake, dir, tick: game.tick + 1 };
 }
 
-export function foodRemainingMs(game: Game, now: number): number {
-  return Math.max(0, FOOD_MS - (now - game.foodAt));
+export function foodRemainingMs(game: Game, now: number, foodMs = FOOD_MS): number {
+  return Math.max(0, foodMs - (now - game.foodAt));
 }

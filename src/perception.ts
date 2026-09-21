@@ -2,7 +2,6 @@ import {
   DELTA,
   LEFT,
   RIGHT,
-  foodRemainingMs,
   wrap,
   wrapDelta,
   type CellKind,
@@ -14,6 +13,7 @@ import {
 export type JevState = {
   heading: Dir;
   length: "tiny" | "short" | "medium" | "long";
+  motion: string;
   adjacent: {
     ahead: CellKind;
     left: CellKind;
@@ -21,18 +21,17 @@ export type JevState = {
   };
   food: {
     where: string;
-    time_left: string;
   };
 };
 
 export const TURN_QUESTION = {
   type: "choice" as const,
   instructions:
-    "You are the snake. Pick this tick's turn. Food vanishes soon; prefer a turn that heads toward it when the way is clear. Hitting your body ends the game. The board wraps around the edges. You cannot reverse.",
+    "Steer a snake that already keeps moving. It coasts straight until this answer is applied on a later tick. Prefer a turn toward food when that adjacent cell is empty. Hitting your body ends the game. The board wraps. You cannot reverse.",
   criteria: {
-    straight: "Keep the current heading.",
-    left: "Turn 90 degrees left relative to the current heading.",
-    right: "Turn 90 degrees right relative to the current heading.",
+    straight: "Do nothing extra; it will keep the current heading.",
+    left: "Turn 90 degrees left on the tick this answer is applied.",
+    right: "Turn 90 degrees right on the tick this answer is applied.",
   },
 };
 
@@ -41,13 +40,6 @@ function lengthWord(length: number): JevState["length"] {
   if (length <= 8) return "short";
   if (length <= 16) return "medium";
   return "long";
-}
-
-function timeWord(ms: number): string {
-  if (ms > 3500) return "just appeared";
-  if (ms > 2000) return "a few seconds";
-  if (ms > 800) return "almost gone";
-  return "about to vanish";
 }
 
 function toLocal(dx: number, dy: number, heading: Dir): { forward: number; right: number } {
@@ -94,6 +86,7 @@ export function perceive(game: Game, now: number): JevState {
   return {
     heading: game.dir,
     length: lengthWord(game.snake.length),
+    motion: "coasting straight; this turn is applied after the reply, not on this snapshot",
     adjacent: {
       ahead: cellKind(game, stepPoint(head, game.dir)),
       left: cellKind(game, stepPoint(head, LEFT[game.dir])),
@@ -101,7 +94,6 @@ export function perceive(game: Game, now: number): JevState {
     },
     food: {
       where: foodWhere(local.forward, local.right),
-      time_left: timeWord(foodRemainingMs(game, now)),
     },
   };
 }
