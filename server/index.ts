@@ -25,7 +25,7 @@ app.post("/api/move", async (req, res) => {
   }
 
   const questions = { turn: TURN_QUESTION };
-  const input = { model: MODEL, state, questions };
+  const input = { state, questions };
   const started = Date.now();
 
   try {
@@ -33,22 +33,14 @@ app.post("/api/move", async (req, res) => {
       model: MODEL,
       state,
       questions,
-      providerOptions: {
-        gateway: { zeroDataRetention: true },
-      },
     });
 
-    const answer = result.answers.turn;
+    const choice = result.answers.turn.choice;
     res.json({
-      turn: answer.choice,
+      turn: choice === "left" || choice === "right" ? choice : "straight",
       latencyMs: Date.now() - started,
       input,
-      output: {
-        model: result.response.modelId,
-        answers: result.answers,
-        usage: result.usage,
-        providerMetadata: result.providerMetadata,
-      },
+      output: { answers: result.answers },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -4,7 +4,7 @@
 
 Each tick the model gets a local view (cells ahead / left / right, where the food is, how long it has left) and returns one Choice: `straight`, `left`, or `right`. Code owns physics. Reverse is not an option. Hitting yourself is game over. Food lasts 5 seconds, then respawns.
 
-Calls go through [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) (`typesafe-ai/jev`). The inspector shows the evaluate request and response.
+Calls go through [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) (`typesafe-ai/jev`). Each move in the list expands to the state/questions sent to Jev and the answers it returned.
 
 ## Run
 

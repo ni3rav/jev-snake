@@ -11,8 +11,7 @@
   "dependencies": {
     "ai": "^7.0.107",
     "dotenv": "^18.0.1",
-    "express": "^5.2.1",
-    "shiki": "^4.4.3"
+    "express": "^5.2.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
@@ -23,6 +22,8 @@
     "vite": "^8.3.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

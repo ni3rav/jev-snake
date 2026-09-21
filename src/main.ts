@@ -1,6 +1,5 @@
 import "./style.css";
 import {
-  FOOD_MS,
   MIN_TICK_MS,
   SIZE,
   expireFood,
@@ -10,7 +9,6 @@ import {
   type Turn,
 } from "./game.ts";
 import { perceive } from "./perception.ts";
-import { highlightJson } from "./highlight.ts";
 
 type MoveResponse = {
   turn: Turn;
@@ -20,20 +18,17 @@ type MoveResponse = {
   error?: string;
 };
 
+type StatusKind = "ready" | "waiting" | "playing" | "paused" | "dead" | "error";
+
+const TURNS: Turn[] = ["straight", "left", "right"];
+
 const boardEl = document.querySelector("#board")!;
-const scoreEl = document.querySelector("#score")!;
-const eatenEl = document.querySelector("#eaten")!;
-const missedEl = document.querySelector("#missed")!;
-const tickEl = document.querySelector("#tick")!;
-const statusEl = document.querySelector("#status")!;
-const foodBarEl = document.querySelector("#food-bar") as HTMLElement;
+const hudEl = document.querySelector("#hud")!;
+const statusEl = document.querySelector("#status") as HTMLElement;
 const playBtn = document.querySelector("#play") as HTMLButtonElement;
 const pauseBtn = document.querySelector("#pause") as HTMLButtonElement;
 const resetBtn = document.querySelector("#reset") as HTMLButtonElement;
-const callMetaEl = document.querySelector("#call-meta")!;
-const inputJsonEl = document.querySelector("#input-json")!;
-const outputJsonEl = document.querySelector("#output-json")!;
-const historyEl = document.querySelector("#history")!;
+const movesEl = document.querySelector("#moves")!;
 
 const cells: HTMLDivElement[] = [];
 for (let i = 0; i < SIZE * SIZE; i++) {
@@ -61,9 +56,9 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-function setStatus(text: string, error = false): void {
+function setStatus(text: string, kind: StatusKind = "ready"): void {
   statusEl.textContent = text;
-  statusEl.classList.toggle("error", error);
+  statusEl.dataset.kind = kind;
 }
 
 function render(now: number): void {
@@ -76,47 +71,44 @@ function render(now: number): void {
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
       const kind = occupancy.get(`${x},${y}`);
-      const cell = cells[y * SIZE + x]!;
-      cell.className = kind ? `cell ${kind}` : "cell";
+      cells[y * SIZE + x]!.className = kind ? `cell ${kind}` : "cell";
     }
   }
 
-  scoreEl.textContent = String(game.score);
-  eatenEl.textContent = String(game.eaten);
-  missedEl.textContent = String(game.missed);
-  tickEl.textContent = String(game.tick);
-  const remaining = foodRemainingMs(game, now) / FOOD_MS;
-  foodBarEl.style.transform = `scaleX(${remaining})`;
+  const food = (foodRemainingMs(game, now) / 1000).toFixed(1);
+  hudEl.textContent = `score ${game.score} · missed ${game.missed} · food ${food}s`;
 }
 
-async function showCall(payload: MoveResponse, tick: number): Promise<void> {
-  const [inputHtml, outputHtml] = await Promise.all([
-    highlightJson(payload.input, "input"),
-    highlightJson(payload.output, "output"),
-  ]);
-  inputJsonEl.innerHTML = inputHtml;
-  outputJsonEl.innerHTML = outputHtml;
-  callMetaEl.textContent = `tick ${tick} · ${payload.latencyMs}ms · turn ${payload.turn}`;
+function dump(label: string, value: unknown): string {
+  return `${label}\n${JSON.stringify(value, null, 2)}`;
+}
 
-  const item = document.createElement("li");
-  item.innerHTML = `<span>tick ${tick} → ${payload.turn}</span><span>${payload.latencyMs}ms</span>`;
-  historyEl.prepend(item);
-  while (historyEl.children.length > 40) historyEl.lastElementChild?.remove();
+function pushMove(tick: number, payload: MoveResponse): void {
+  const item = document.createElement("details");
+  const summary = document.createElement("summary");
+  summary.textContent = `${tick} ${payload.turn} ${payload.latencyMs}ms`;
+  const input = document.createElement("pre");
+  input.textContent = dump("input", payload.input);
+  const output = document.createElement("pre");
+  output.textContent = dump("output", payload.output);
+  item.append(summary, input, output);
+  movesEl.prepend(item);
 }
 
 async function requestMove(state: unknown, signal: AbortSignal): Promise<MoveResponse> {
+  const timeout = AbortSignal.timeout(20_000);
   const response = await fetch("/api/move", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ state }),
-    signal,
+    signal: AbortSignal.any([signal, timeout]),
   });
-  const payload = (await response.json()) as MoveResponse & { error?: string };
+  const payload = (await response.json()) as MoveResponse;
   if (!response.ok) {
     throw new Error(payload.error ?? `HTTP ${response.status}`);
   }
-  if (payload.turn !== "straight" && payload.turn !== "left" && payload.turn !== "right") {
-    throw new Error(`Unexpected turn: ${String(payload.turn)}`);
+  if (!TURNS.includes(payload.turn)) {
+    payload.turn = "straight";
   }
   return payload;
 }
@@ -126,11 +118,10 @@ async function loop(signal: AbortSignal): Promise<void> {
     const started = Date.now();
     game = expireFood(game, started);
     render(started);
-    setStatus("Jev thinking…");
+    setStatus("waiting", "waiting");
 
-    const state = perceive(game, started);
-    const payload = await requestMove(state, signal);
-    await showCall(payload, game.tick + 1);
+    const payload = await requestMove(perceive(game, started), signal);
+    pushMove(game.tick + 1, payload);
 
     const waited = Date.now() - started;
     if (waited < MIN_TICK_MS) await sleep(MIN_TICK_MS - waited, signal);
@@ -141,10 +132,10 @@ async function loop(signal: AbortSignal): Promise<void> {
     render(now);
 
     if (game.dead) {
-      setStatus("Dead — bit itself");
+      setStatus("dead", "dead");
       running = false;
     } else {
-      setStatus(`Turned ${payload.turn}`);
+      setStatus(payload.turn, "playing");
     }
   }
   syncButtons();
@@ -170,8 +161,7 @@ function start(): void {
   void loop(abort.signal).catch((error: unknown) => {
     if (error instanceof DOMException && error.name === "AbortError") return;
     running = false;
-    const message = error instanceof Error ? error.message : String(error);
-    setStatus(message, true);
+    setStatus(error instanceof Error ? error.message : String(error), "error");
     syncButtons();
   });
 }
@@ -179,11 +169,8 @@ function start(): void {
 function reset(): void {
   stop();
   game = newGame(Date.now());
-  historyEl.replaceChildren();
-  inputJsonEl.replaceChildren();
-  outputJsonEl.replaceChildren();
-  callMetaEl.textContent = "No calls yet";
-  setStatus("Ready");
+  movesEl.replaceChildren();
+  setStatus("ready");
   render(Date.now());
   syncButtons();
 }
@@ -191,16 +178,9 @@ function reset(): void {
 playBtn.addEventListener("click", start);
 pauseBtn.addEventListener("click", () => {
   stop();
-  setStatus("Paused");
+  setStatus("paused", "paused");
 });
 resetBtn.addEventListener("click", reset);
 
 render(Date.now());
 syncButtons();
-void Promise.all([
-  highlightJson({ waiting: "press Start — this pane is the evaluate request" }, "input"),
-  highlightJson({ waiting: "answers, probabilities, usage, and latency land here" }, "output"),
-]).then(([inputHtml, outputHtml]) => {
-  inputJsonEl.innerHTML = inputHtml;
-  outputJsonEl.innerHTML = outputHtml;
-});
